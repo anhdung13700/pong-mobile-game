@@ -1,0 +1,246 @@
+const gameArea = document.getElementById('game');
+const leftPaddleEl = document.getElementById('left-paddle');
+const rightPaddleEl = document.getElementById('right-paddle');
+const ballEl = document.getElementById('ball');
+const leftScoreEl = document.getElementById('score-left');
+const rightScoreEl = document.getElementById('score-right');
+const resetBtn = document.getElementById('reset-game');
+const leftZone = document.getElementById('left-zone');
+const rightZone = document.getElementById('right-zone');
+
+const state = {
+  width: 0,
+  height: 0,
+  paddleHeight: 116,
+  paddleOffset: 22,
+  ballRadius: 10,
+  ballSpeed: 360,
+  leftPaddleY: 0,
+  rightPaddleY: 0,
+  leftScore: 0,
+  rightScore: 0,
+  dragging: null,
+  lastTime: 0,
+  ball: {
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+  },
+};
+
+let audioCtx = null;
+
+function ensureAudio() {
+  if (!audioCtx) {
+    const AudioCtor = window.AudioContext || window.webkitAudioContext;
+    if (AudioCtor) audioCtx = new AudioCtor();
+  }
+}
+
+function playTone(frequency, duration = 0.12, type = 'triangle', volume = 0.04, sweep = 0) {
+  if (!audioCtx) ensureAudio();
+  if (!audioCtx) return;
+
+  const oscillator = audioCtx.createOscillator();
+  const gainNode = audioCtx.createGain();
+  const now = audioCtx.currentTime;
+
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, now);
+  if (sweep) oscillator.frequency.linearRampToValueAtTime(frequency + sweep, now + duration);
+
+  gainNode.gain.setValueAtTime(0.0001, now);
+  gainNode.gain.exponentialRampToValueAtTime(volume, now + 0.02);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+  oscillator.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  oscillator.start(now);
+  oscillator.stop(now + duration);
+}
+
+function playFunnySound(kind) {
+  if (kind === 'hit') {
+    playTone(220 + Math.random() * 100, 0.09, 'square', 0.035, 60);
+    setTimeout(() => playTone(330 + Math.random() * 120, 0.08, 'triangle', 0.025), 30);
+  }
+
+  if (kind === 'wall') {
+    playTone(150 + Math.random() * 80, 0.08, 'sawtooth', 0.03, 40);
+  }
+
+  if (kind === 'score') {
+    playTone(480, 0.1, 'triangle', 0.045, 90);
+    setTimeout(() => playTone(620, 0.12, 'triangle', 0.035, 110), 80);
+    setTimeout(() => playTone(780, 0.14, 'sine', 0.025, 150), 160);
+  }
+}
+
+function updateScore() {
+  leftScoreEl.textContent = state.leftScore;
+  rightScoreEl.textContent = state.rightScore;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function resizeGame() {
+  const rect = gameArea.getBoundingClientRect();
+  state.width = rect.width;
+  state.height = rect.height;
+  state.leftPaddleY = state.height / 2 - state.paddleHeight / 2;
+  state.rightPaddleY = state.height / 2 - state.paddleHeight / 2;
+
+  leftPaddleEl.style.left = '22px';
+  rightPaddleEl.style.right = '22px';
+  renderPaddles();
+  resetBall(Math.random() > 0.5 ? 1 : -1);
+}
+
+function renderPaddles() {
+  leftPaddleEl.style.top = `${state.leftPaddleY}px`;
+  leftPaddleEl.style.height = `${state.paddleHeight}px`;
+  rightPaddleEl.style.top = `${state.rightPaddleY}px`;
+  rightPaddleEl.style.height = `${state.paddleHeight}px`;
+}
+
+function resetBall(direction) {
+  const centerX = state.width / 2;
+  const centerY = state.height / 2;
+  const angle = (Math.random() * 1.2 - 0.6) + (direction > 0 ? 0.3 : -0.3);
+
+  state.ball.x = centerX;
+  state.ball.y = centerY;
+  state.ball.vx = direction * (state.ballSpeed * 0.9);
+  state.ball.vy = state.ballSpeed * angle;
+
+  ballEl.style.left = `${centerX}px`;
+  ballEl.style.top = `${centerY}px`;
+}
+
+function movePaddle(side, pointerY) {
+  const maxY = state.height - state.paddleHeight;
+  const y = clamp(pointerY - state.paddleHeight / 2, 0, maxY);
+
+  if (side === 'left') state.leftPaddleY = y;
+  else state.rightPaddleY = y;
+
+  renderPaddles();
+}
+
+function pointerToGameY(event) {
+  const rect = gameArea.getBoundingClientRect();
+  return event.clientY - rect.top;
+}
+
+function handlePointerDown(event, side) {
+  ensureAudio();
+  state.dragging = side;
+  movePaddle(side, pointerToGameY(event));
+  event.preventDefault();
+}
+
+function handlePointerMove(event) {
+  if (!state.dragging) return;
+  movePaddle(state.dragging, pointerToGameY(event));
+}
+
+function handlePointerUp() {
+  state.dragging = null;
+}
+
+function handlePaddleCollision(side) {
+  const paddleY = side === 'left' ? state.leftPaddleY : state.rightPaddleY;
+  const paddleCenter = paddleY + state.paddleHeight / 2;
+  const relativeIntersect = (state.ball.y - paddleCenter) / (state.paddleHeight / 2);
+  const bounceAngle = relativeIntersect * 1.1;
+
+  const direction = side === 'left' ? 1 : -1;
+  const currentSpeed = Math.hypot(state.ball.vx, state.ball.vy) * 1.08;
+
+  state.ball.vx = direction * currentSpeed * Math.cos(bounceAngle + 0.4);
+  state.ball.vy = currentSpeed * Math.sin(bounceAngle + 0.4);
+
+  const offset = side === 'left' ? 20 : state.width - 20;
+  state.ball.x = clamp(state.ball.x, offset - 40, offset + 40);
+  playFunnySound('hit');
+}
+
+function updateBall(delta) {
+  state.ball.x += state.ball.vx * delta;
+  state.ball.y += state.ball.vy * delta;
+
+  if (state.ball.y <= 0 || state.ball.y >= state.height) {
+    state.ball.y = clamp(state.ball.y, 0, state.height);
+    state.ball.vy *= -1;
+    playFunnySound('wall');
+  }
+
+  const leftPaddleX = 22 + 18;
+  const rightPaddleX = state.width - 22 - 18;
+
+  const leftBallTouch =
+    state.ball.x - state.ballRadius <= leftPaddleX &&
+    state.ball.x + state.ballRadius >= 22 &&
+    state.ball.y >= state.leftPaddleY &&
+    state.ball.y <= state.leftPaddleY + state.paddleHeight &&
+    state.ball.vx < 0;
+
+  const rightBallTouch =
+    state.ball.x + state.ballRadius >= rightPaddleX &&
+    state.ball.x - state.ballRadius <= state.width - 22 &&
+    state.ball.y >= state.rightPaddleY &&
+    state.ball.y <= state.rightPaddleY + state.paddleHeight &&
+    state.ball.vx > 0;
+
+  if (leftBallTouch) handlePaddleCollision('left');
+  if (rightBallTouch) handlePaddleCollision('right');
+
+  if (state.ball.x < -30) {
+    state.rightScore += 1;
+    updateScore();
+    playFunnySound('score');
+    resetBall(1);
+  }
+
+  if (state.ball.x > state.width + 30) {
+    state.leftScore += 1;
+    updateScore();
+    playFunnySound('score');
+    resetBall(-1);
+  }
+
+  ballEl.style.left = `${state.ball.x}px`;
+  ballEl.style.top = `${state.ball.y}px`;
+}
+
+function gameLoop(timestamp) {
+  const delta = Math.min((timestamp - state.lastTime) / 1000 || 0.016, 0.032);
+  state.lastTime = timestamp;
+  updateBall(delta);
+  requestAnimationFrame(gameLoop);
+}
+
+leftZone.addEventListener('pointerdown', (event) => handlePointerDown(event, 'left'));
+rightZone.addEventListener('pointerdown', (event) => handlePointerDown(event, 'right'));
+window.addEventListener('pointermove', handlePointerMove);
+window.addEventListener('pointerup', handlePointerUp);
+window.addEventListener('pointercancel', handlePointerUp);
+window.addEventListener('resize', resizeGame);
+
+resetBtn.addEventListener('click', () => {
+  state.leftScore = 0;
+  state.rightScore = 0;
+  updateScore();
+  resetBall(Math.random() > 0.5 ? 1 : -1);
+  playFunnySound('score');
+});
+
+window.addEventListener('load', () => {
+  resizeGame();
+  updateScore();
+  requestAnimationFrame(gameLoop);
+});
