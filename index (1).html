@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Pong Party</title>
+    <meta
+      name="description"
+      content="A silly mobile-friendly Pong game with drag controls and goofy sound effects."
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <header class="hud">
+        <div class="score-box">
+          <span class="label">Left</span>
+          <span id="score-left">0</span>
+        </div>
+
+        <div class="title-wrap">
+          <span class="title">Pong Party</span>
+          <span class="subtitle">drag your side</span>
+        </div>
+
+        <div class="score-box">
+          <span class="label">Right</span>
+          <span id="score-right">0</span>
+        </div>
+      </header>
+
+      <section id="game" class="game-area" aria-label="Pong game area">
+        <div class="center-line"></div>
+        <div id="left-zone" class="side-zone left-zone" aria-label="Left paddle drag zone"></div>
+        <div id="right-zone" class="side-zone right-zone" aria-label="Right paddle drag zone"></div>
+        <div id="left-paddle" class="paddle left-paddle"></div>
+        <div id="right-paddle" class="paddle right-paddle"></div>
+        <div id="ball" class="ball"></div>
+      </section>
+
+      <div class="controls">
+        <button id="reset-game" type="button">New round</button>
+      </div>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
